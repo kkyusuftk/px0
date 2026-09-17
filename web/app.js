@@ -298,11 +298,11 @@
   }
   function toPos(node, off) {
     if (node === rowsEl) {
-      const row = rowsEl.children[off] || rowsEl.lastElementChild;
-      if (!row)
+      const row2 = rowsEl.children[off] || rowsEl.lastElementChild;
+      if (!row2)
         return null;
       const atEnd = !rowsEl.children[off];
-      return { line: +row.dataset.l, col: atEnd ? $(".c", row).textContent.length : 0 };
+      return { line: +row2.dataset.l, col: atEnd ? $(".c", row2).textContent.length : 0 };
     }
     const el = node.nodeType === 1 ? node : node.parentElement;
     const row = el && el.closest(".row");
@@ -782,10 +782,6 @@
       return;
     const row = treeEl.querySelector('[data-file="' + CSS.escape(path) + '"]');
     if (row) {
-      if (treeEl.classList.contains("changed-only") && !row.classList.contains("dirty")) {
-        treeEl.classList.remove("changed-only");
-        $("#btn-changed")?.classList.remove("active");
-      }
       $$(".tr.sel", treeEl).forEach((x) => x.classList.remove("sel"));
       row.classList.add("sel");
       row.scrollIntoView({ block: "center" });
@@ -1475,11 +1471,11 @@
       node = p.offsetNode;
       off = p.offset;
     } else if (document.caretRangeFromPoint) {
-      const r = document.caretRangeFromPoint(x, y);
-      if (!r)
+      const r2 = document.caretRangeFromPoint(x, y);
+      if (!r2)
         return null;
-      node = r.startContainer;
-      off = r.startOffset;
+      node = r2.startContainer;
+      off = r2.startOffset;
     } else
       return null;
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -2253,9 +2249,9 @@
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
     mdEnhance();
     mdDrawn = d;
-    const target = d.mdAnchor && mdFindAnchor(d.mdAnchor);
-    if (target)
-      mdScrollTo(target);
+    const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
+    if (target2)
+      mdScrollTo(target2);
     else if (d.mdLine)
       previewLine(d.mdLine);
     else
@@ -2307,7 +2303,7 @@
   function mdSanitize(html, docPath) {
     const body = new DOMParser().parseFromString(html, "text/html").body;
     const dir = docPath.slice(0, docPath.lastIndexOf("/") + 1);
-    const base = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
+    const base2 = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
     for (const el of [...body.querySelectorAll("*")]) {
       if (!body.contains(el))
         continue;
@@ -2339,19 +2335,19 @@
       if (tag === "input")
         el.disabled = true;
       if (tag === "img")
-        mdSetImage(el, mdURL(attrs.src || ""), base);
+        mdSetImage(el, mdURL(attrs.src || ""), base2);
       if (tag === "a" && attrs.href)
-        mdSetLink(el, mdURL(attrs.href), base);
+        mdSetLink(el, mdURL(attrs.href), base2);
     }
     const frag = document.createDocumentFragment();
     while (body.firstChild)
       frag.appendChild(document.adoptNode(body.firstChild));
     return frag;
   }
-  function mdLocal(ref, base) {
+  function mdLocal(ref, base2) {
     let u;
     try {
-      u = new URL(ref, base);
+      u = new URL(ref, base2);
     } catch {
       return null;
     }
@@ -2363,7 +2359,7 @@
     } catch {}
     return { path: path.slice(1), hash: u.hash.slice(1) };
   }
-  function mdSetImage(img, src, base) {
+  function mdSetImage(img, src, base2) {
     img.setAttribute("loading", "lazy");
     img.setAttribute("decoding", "async");
     img.classList.add("md-zoomable");
@@ -2377,7 +2373,7 @@
       img.setAttribute("src", src);
       img.dataset.origSrc = src;
     } else if (src) {
-      const t = mdLocal(src, base);
+      const t = mdLocal(src, base2);
       if (t) {
         img.setAttribute("src", "/api/raw?path=" + encodeURIComponent(t.path));
         img.dataset.rawPath = t.path;
@@ -2385,7 +2381,7 @@
       }
     }
   }
-  function mdSetLink(a, href, base) {
+  function mdSetLink(a, href, base2) {
     if (href.startsWith("#")) {
       a.setAttribute("href", href);
       a.dataset.anchor = href.slice(1);
@@ -2400,7 +2396,7 @@
       a.rel = "noopener noreferrer";
       return;
     }
-    const t = mdLocal(href, base);
+    const t = mdLocal(href, base2);
     if (!t)
       return;
     a.setAttribute("href", "/api/raw?path=" + encodeURIComponent(t.path));
@@ -2413,17 +2409,17 @@
     for (const q of $$("blockquote", mdArticle))
       mdAlert(q);
     for (const pre of $$("pre", mdArticle)) {
-      const wrap = document.createElement("div");
-      wrap.className = "md-pre";
+      const wrap2 = document.createElement("div");
+      wrap2.className = "md-pre";
       if (pre.dataset.lang)
-        wrap.dataset.lang = pre.dataset.lang;
-      pre.replaceWith(wrap);
+        wrap2.dataset.lang = pre.dataset.lang;
+      pre.replaceWith(wrap2);
       const copy = document.createElement("button");
       copy.className = "md-copy";
       copy.title = "Copy code";
       copy.setAttribute("aria-label", "Copy code");
       copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
-      wrap.append(pre, copy);
+      wrap2.append(pre, copy);
     }
   }
   function mdAlert(q) {
@@ -2602,7 +2598,7 @@
   }
   function showPreviewHit(i) {
     const marks = $$("mark.md-hit", mdArticle);
-    marks.forEach((m, k) => m.classList.toggle("on", k === i));
+    marks.forEach((m2, k) => m2.classList.toggle("on", k === i));
     const m = marks[i];
     if (!m)
       return;
@@ -2991,18 +2987,18 @@
         posEl.textContent = d.imageMeta ? `${d.imageMeta.width} × ${d.imageMeta.height} px · ${zoomText}` : zoomText;
       }
     }
-    const isMd = !!(d && d.markdown), shown = previewing(d);
+    const isMd = !!(d && d.markdown), shown2 = previewing(d);
     const mdBtn = $('[data-action="md-preview"]');
     if (mdBtn) {
       mdBtn.hidden = !isMd;
-      mdBtn.classList.toggle("active", shown);
+      mdBtn.classList.toggle("active", shown2);
     }
     const sw = $("#md-switch");
     if (sw) {
       sw.hidden = !isMd;
       document.body.classList.toggle("md-tab", isMd);
       for (const b of sw.children)
-        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown);
+        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown2);
     }
     const hasDiff = !!(d && d.diffAvailable);
     const isDiffOn = !!(d && d.diffMode);
@@ -3534,15 +3530,15 @@
       return;
     const canvas = $("#imgview-canvas");
     const img = $("#imgview-img");
-    const vp = $("#imgview-viewport");
-    if (!canvas || !img || !vp)
+    const vp2 = $("#imgview-viewport");
+    if (!canvas || !img || !vp2)
       return;
     const natW = d.imageMeta?.width || img.naturalWidth || 100;
     const natH = d.imageMeta?.height || img.naturalHeight || 100;
     let currentScale = d.imageScale || 1;
     if (d.imageFit) {
-      const vpW = Math.max(100, vp.clientWidth - 64);
-      const vpH = Math.max(100, vp.clientHeight - 64);
+      const vpW = Math.max(100, vp2.clientWidth - 64);
+      const vpH = Math.max(100, vp2.clientHeight - 64);
       const fitScale = Math.min(vpW / natW, vpH / natH);
       currentScale = natW <= vpW && natH <= vpH ? 1 : fitScale;
       d.imageScale = currentScale;
@@ -3678,9 +3674,9 @@
     if (ivInit)
       return;
     ivInit = true;
-    const vp = $("#imgview-viewport");
+    const vp2 = $("#imgview-viewport");
     const hud = $("#imgview-hud");
-    if (!vp)
+    if (!vp2)
       return;
     $("#iv-zoom-in")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3714,7 +3710,7 @@
       e.stopPropagation();
       toggleImagePixelated();
     });
-    vp.addEventListener("mousedown", (e) => {
+    vp2.addEventListener("mousedown", (e) => {
       if (e.target.closest("#imgview-hud") || e.button !== 0)
         return;
       const d = doc_();
@@ -3723,7 +3719,7 @@
       isPanning = true;
       panStart = { x: e.clientX, y: e.clientY };
       panOrigin = { x: d.imagePanX || 0, y: d.imagePanY || 0 };
-      vp.classList.add("panning");
+      vp2.classList.add("panning");
       e.preventDefault();
     });
     window.addEventListener("mousemove", (e) => {
@@ -3745,9 +3741,9 @@
       if (!isPanning)
         return;
       isPanning = false;
-      vp.classList.remove("panning");
+      vp2.classList.remove("panning");
     });
-    vp.addEventListener("wheel", (e) => {
+    vp2.addEventListener("wheel", (e) => {
       const d = doc_();
       if (!d || !d.isImage)
         return;
@@ -3775,16 +3771,16 @@
     let idx = S2.tabs.findIndex((t) => t.path === path);
     if (idx < 0) {
       let j;
-      const start = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
+      const start2 = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
       try {
-        j = await api("/api/file", { path, start, count: CHUNK });
+        j = await api("/api/file", { path, start: start2, count: CHUNK });
       } catch (e) {
         setStatusNote(path + ": " + e.message, 4000);
         return;
       }
       const isImg = !!j.image;
       const hasDiff = !isImg && !!j.diffAvailable;
-      const d = {
+      const d2 = {
         path,
         name: path.split("/").pop(),
         lang: isImg ? "image" : j.lang,
@@ -3792,7 +3788,7 @@
         maxCols: isImg ? 0 : j.maxCols,
         size: j.size,
         lines: isImg ? [] : new Array(j.total),
-        chunks: new Set(isImg ? [] : [start / CHUNK]),
+        chunks: new Set(isImg ? [] : [start2 / CHUNK]),
         pending: new Set,
         refining: new Set,
         scrollTop: 0,
@@ -3808,15 +3804,15 @@
       };
       if (!isImg) {
         for (let i = 0;i < j.lines.length; i++)
-          d.lines[j.start + i] = j.lines[i];
+          d2.lines[j.start + i] = j.lines[i];
       }
-      d.lsp = !isImg && j.lsp || { state: "off", server: "" };
-      S2.tabs.push(d);
+      d2.lsp = !isImg && j.lsp || { state: "off", server: "" };
+      S2.tabs.push(d2);
       idx = S2.tabs.length - 1;
       if (!isImg && j.refine)
-        refineChunk(d, start / CHUNK);
+        refineChunk(d2, start2 / CHUNK);
       if (!isImg)
-        loadGutter(d);
+        loadGutter(d2);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
@@ -3922,7 +3918,7 @@
       const hasDiff = !!j.diffAvailable;
       const newCur = Math.max(1, Math.min(keep.cur || 1, j.total));
       const diffMode = hasDiff ? keep.diffMode || null : null;
-      const d = {
+      const d2 = {
         path: tgt.path,
         name: tgt.path.split("/").pop(),
         lang: j.lang,
@@ -3947,13 +3943,13 @@
         diffScroll: keep === activeDoc && keep.diffMode ? diffScrollTop() : 0
       };
       for (let k = 0;k < j.lines.length; k++) {
-        d.lines[j.start + k] = j.lines[k];
+        d2.lines[j.start + k] = j.lines[k];
       }
-      d.lsp = j.lsp || { state: "off", server: "" };
-      S2.tabs[idx] = d;
+      d2.lsp = j.lsp || { state: "off", server: "" };
+      S2.tabs[idx] = d2;
       if (j.refine)
-        refineChunk(d, tgt.start / CHUNK);
-      loadGutter(d);
+        refineChunk(d2, tgt.start / CHUNK);
+      loadGutter(d2);
     }
     const d = doc_();
     if (d) {
@@ -4490,9 +4486,9 @@
     if (vimPending === "g") {
       e.preventDefault();
       if (e.key === "g") {
-        const count = parseInt(vimCount, 10);
-        if (!isNaN(count) && count > 0) {
-          d.cur = Math.max(1, Math.min(d.total, count));
+        const count2 = parseInt(vimCount, 10);
+        if (!isNaN(count2) && count2 > 0) {
+          d.cur = Math.max(1, Math.min(d.total, count2));
           d.col = 0;
           const y = (d.cur - 1) * LH;
           vp.scrollTop = Math.max(0, y - LH * 3);
@@ -4522,9 +4518,9 @@
       } else if (e.key === "h") {
         showCalls();
       } else if (e.key === "t") {
-        const count = parseInt(vimCount, 10);
-        if (!isNaN(count) && count > 0 && count <= S2.tabs.length) {
-          switchTab(count - 1);
+        const count2 = parseInt(vimCount, 10);
+        if (!isNaN(count2) && count2 > 0 && count2 <= S2.tabs.length) {
+          switchTab(count2 - 1);
         } else if (S2.tabs.length > 1) {
           switchTab((S2.active + 1) % S2.tabs.length);
         }
@@ -5715,24 +5711,24 @@
       renderSettingsNav();
       renderSettingsList();
     });
-    const listEl = $("#settings-list");
-    if (listEl) {
-      listEl.addEventListener("change", (e) => {
-        const target = e.target;
-        const key = target.dataset.key;
+    const listEl2 = $("#settings-list");
+    if (listEl2) {
+      listEl2.addEventListener("change", (e) => {
+        const target2 = e.target;
+        const key = target2.dataset.key;
         if (!key)
           return;
         let value;
-        if (target.type === "checkbox") {
-          value = target.checked;
-        } else if (target.type === "number") {
-          value = parseFloat(target.value);
+        if (target2.type === "checkbox") {
+          value = target2.checked;
+        } else if (target2.type === "number") {
+          value = parseFloat(target2.value);
         } else {
-          value = target.value;
+          value = target2.value;
         }
         handleSettingChange(key, value);
       });
-      listEl.addEventListener("click", (e) => {
+      listEl2.addEventListener("click", (e) => {
         const pill = e.target.closest(".settings-pill-tag");
         if (pill) {
           const key = pill.dataset.setKey;
@@ -6752,15 +6748,15 @@
     if (!instruction || !session.target)
       return;
     const params = { path: session.target.path, l1: session.target.l1, l2: session.target.l2, instruction };
-    let job;
+    let job2;
     try {
-      job = await apiPost("/api/agent/edit", params);
+      job2 = await apiPost("/api/agent/edit", params);
     } catch (e) {
       showErr(session, e.message);
       return;
     }
-    session.jobId = job.id;
-    session.harness = job.harness;
+    session.jobId = job2.id;
+    session.harness = job2.harness;
     hideSelectionBar();
     const initialNote = "Editing with " + (chosenModel() ? chosen() + " (" + chosenModel() + ")" : chosen()) + "...";
     setBusy(session, true, initialNote);

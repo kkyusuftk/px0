@@ -184,8 +184,6 @@ Any selection, native or whole-file, drives the footer selection bar (`#footer-s
 
 ## Explorer Reveal on Search Navigation
 
-File search (`palette.js`) and workspace search results (`search.js`) pass `reveal: true` to `openFile()` in `tabs.js`. After a successful open, including an already-open tab, it shows the sidebar and calls `revealFile()` unless `explorer.autoReveal` is false. Content-search navigation retains its requested line.
+File search (`palette.js`) and workspace search results (`search.js`) pass `reveal: true` to `openFile()` in `tabs.js`. After a successful open, it shows the sidebar and calls `revealFile()` unless `explorer.autoReveal` is false.
 
-In `tree.js`, reveal expands ancestors in order and awaits their actual loads. Manual expansion and reveal share a pending request per child container through a `WeakMap`; a failed request leaves the folder retryable. This avoids timing assumptions on remote connections. The active-document check stops an older reveal from selecting or scrolling after navigation has moved elsewhere.
-
-Once the row exists, reveal selects and centers it in the explorer. A changed-files filter that would hide a clean result is cleared together with its toolbar indicator. Root-level files need no expansion, and paths absent from the explorer leave its selection unchanged.
+`tree.js` awaits each ancestor's load before selecting and scrolling to the file, sharing pending loads with manual expansion. An active-document check prevents an outdated reveal from selecting or scrolling after navigation changes. The existing changed-files filter still applies.

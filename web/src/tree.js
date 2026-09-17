@@ -98,11 +98,6 @@ export async function revealFile(path, isCurrent = () => true) {
   if (!isCurrent()) return;
   const row = treeEl.querySelector('[data-file="' + CSS.escape(path) + '"]');
   if (row) {
-    // A clean search result must remain visible even with the git filter on.
-    if (treeEl.classList.contains('changed-only') && !row.classList.contains('dirty')) {
-      treeEl.classList.remove('changed-only');
-      $('#btn-changed')?.classList.remove('active');
-    }
     $$('.tr.sel', treeEl).forEach(x => x.classList.remove('sel'));
     row.classList.add('sel');
     row.scrollIntoView({ block: 'center' });

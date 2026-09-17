@@ -50,7 +50,7 @@ sequenceDiagram
 
 ## 3. HTTP Server & API Catalog
 
-File-search and workspace-search navigation request an explorer reveal through `openFile(path, { reveal: true })`. With `explorer.autoReveal` enabled, the frontend shows the sidebar and awaits each ancestor's `/api/tree` response before selecting and scrolling to the result. Pending folder loads are shared with manual expansion; no additional backend endpoint is needed. See [Explorer Reveal on Search Navigation](editor-virtualization.md#explorer-reveal-on-search-navigation).
+Search navigation uses `/api/tree` to [reveal the selected file in the explorer](editor-virtualization.md#explorer-reveal-on-search-navigation).
 
 The server is implemented in [`server.go`](../../server.go) using Go's standard `http.ServeMux`. Every request passes through a centralized `ServeHTTP` wrapper that records activity timestamps and applies pooled Gzip compression when accepted by the client.
 
