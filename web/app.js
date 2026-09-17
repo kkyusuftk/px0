@@ -298,11 +298,11 @@
   }
   function toPos(node, off) {
     if (node === rowsEl) {
-      const row2 = rowsEl.children[off] || rowsEl.lastElementChild;
-      if (!row2)
+      const row = rowsEl.children[off] || rowsEl.lastElementChild;
+      if (!row)
         return null;
       const atEnd = !rowsEl.children[off];
-      return { line: +row2.dataset.l, col: atEnd ? $(".c", row2).textContent.length : 0 };
+      return { line: +row.dataset.l, col: atEnd ? $(".c", row).textContent.length : 0 };
     }
     const el = node.nodeType === 1 ? node : node.parentElement;
     const row = el && el.closest(".row");
@@ -640,6 +640,7 @@
   // web/src/tree.js
   var treeEl = $("#tree");
   var openDirs = new Set;
+  var treeLoads = new WeakMap;
   var GIT_STATUS = {
     M: ["git-M", "modified"],
     A: ["git-A", "added"],
@@ -654,7 +655,7 @@
     try {
       j = await api("/api/tree", { dir });
     } catch {
-      return;
+      return false;
     }
     container.innerHTML = j.children.map((c) => {
       const pad = 8 + depth * 12;
@@ -669,6 +670,7 @@
       const badge = g ? '<span class="gs" title="git: ' + g[1] + '">' + esc2(c.status) + "</span>" : "";
       return '<div class="tr file' + ig + gc + '" data-file="' + esc2(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc2(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc2(c.name) + "</span>" + badge + "</div>";
     }).join("");
+    return true;
   }
   var FILE_KIND = {
     go: "code",
@@ -735,27 +737,55 @@
     const i = name.lastIndexOf(".");
     return i > 0 && FILE_KIND[name.slice(i + 1).toLowerCase()] || "other";
   }
-  async function revealDir(dir) {
+  async function expandTreeRow(row) {
+    const path = row.dataset.dir;
+    const kids = row.nextElementSibling;
+    row.classList.add("open");
+    kids.classList.add("open");
+    openDirs.add(path);
+    if (kids.dataset.loaded)
+      return true;
+    if (!treeLoads.has(kids)) {
+      treeLoads.set(kids, drawTree(path, kids, path.split("/").length).then((loaded) => {
+        if (loaded)
+          kids.dataset.loaded = "1";
+        treeLoads.delete(kids);
+        return loaded;
+      }));
+    }
+    return treeLoads.get(kids);
+  }
+  async function expandTreePath(dir, isCurrent) {
     const parts = dir.split("/");
     for (let i = 0;i < parts.length; i++) {
+      if (!isCurrent())
+        return false;
       const p = parts.slice(0, i + 1).join("/");
       const row = treeEl.querySelector('[data-dir="' + CSS.escape(p) + '"]');
-      if (!row)
-        break;
-      if (!row.classList.contains("open"))
-        row.click();
-      await new Promise((r) => setTimeout(r, 30));
+      if (!row || !await expandTreeRow(row))
+        return false;
     }
+    return isCurrent();
+  }
+  async function revealDir(dir) {
+    if (!await expandTreePath(dir, () => true))
+      return;
     const last = treeEl.querySelector('[data-dir="' + CSS.escape(dir) + '"]');
     if (last)
       last.scrollIntoView({ block: "center" });
   }
-  async function revealFile(path) {
+  async function revealFile(path, isCurrent = () => true) {
     const idx = path.lastIndexOf("/");
-    if (idx > 0)
-      await revealDir(path.slice(0, idx));
+    if (idx > 0 && !await expandTreePath(path.slice(0, idx), isCurrent))
+      return;
+    if (!isCurrent())
+      return;
     const row = treeEl.querySelector('[data-file="' + CSS.escape(path) + '"]');
     if (row) {
+      if (treeEl.classList.contains("changed-only") && !row.classList.contains("dirty")) {
+        treeEl.classList.remove("changed-only");
+        $("#btn-changed")?.classList.remove("active");
+      }
       $$(".tr.sel", treeEl).forEach((x) => x.classList.remove("sel"));
       row.classList.add("sel");
       row.scrollIntoView({ block: "center" });
@@ -770,17 +800,12 @@
       const dirRow = e.target.closest("[data-dir]");
       if (dirRow) {
         const path = dirRow.dataset.dir;
-        const kids = treeEl.querySelector('[data-kids="' + CSS.escape(path) + '"]');
-        const open = dirRow.classList.toggle("open");
-        kids.classList.toggle("open", open);
-        if (open) {
-          openDirs.add(path);
-          if (!kids.dataset.loaded) {
-            kids.dataset.loaded = "1";
-            await drawTree(path, kids, path.split("/").length);
-          }
-        } else
+        if (dirRow.classList.contains("open")) {
+          dirRow.classList.remove("open");
+          dirRow.nextElementSibling.classList.remove("open");
           openDirs.delete(path);
+        } else
+          await expandTreeRow(dirRow);
         return;
       }
       const f = e.target.closest("[data-file]");
@@ -1069,7 +1094,7 @@
       if (r) {
         $$(".rline.sel", resultsEl).forEach((x) => x.classList.remove("sel"));
         r.classList.add("sel");
-        openFile(r.dataset.p, { line: +r.dataset.n });
+        openFile(r.dataset.p, { line: +r.dataset.n, reveal: true });
         const q = $("#q").value;
         if (q)
           flashFind(q);
@@ -1450,11 +1475,11 @@
       node = p.offsetNode;
       off = p.offset;
     } else if (document.caretRangeFromPoint) {
-      const r2 = document.caretRangeFromPoint(x, y);
-      if (!r2)
+      const r = document.caretRangeFromPoint(x, y);
+      if (!r)
         return null;
-      node = r2.startContainer;
-      off = r2.startOffset;
+      node = r.startContainer;
+      off = r.startOffset;
     } else
       return null;
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -2228,9 +2253,9 @@
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
     mdEnhance();
     mdDrawn = d;
-    const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
-    if (target2)
-      mdScrollTo(target2);
+    const target = d.mdAnchor && mdFindAnchor(d.mdAnchor);
+    if (target)
+      mdScrollTo(target);
     else if (d.mdLine)
       previewLine(d.mdLine);
     else
@@ -2282,7 +2307,7 @@
   function mdSanitize(html, docPath) {
     const body = new DOMParser().parseFromString(html, "text/html").body;
     const dir = docPath.slice(0, docPath.lastIndexOf("/") + 1);
-    const base2 = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
+    const base = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
     for (const el of [...body.querySelectorAll("*")]) {
       if (!body.contains(el))
         continue;
@@ -2314,19 +2339,19 @@
       if (tag === "input")
         el.disabled = true;
       if (tag === "img")
-        mdSetImage(el, mdURL(attrs.src || ""), base2);
+        mdSetImage(el, mdURL(attrs.src || ""), base);
       if (tag === "a" && attrs.href)
-        mdSetLink(el, mdURL(attrs.href), base2);
+        mdSetLink(el, mdURL(attrs.href), base);
     }
     const frag = document.createDocumentFragment();
     while (body.firstChild)
       frag.appendChild(document.adoptNode(body.firstChild));
     return frag;
   }
-  function mdLocal(ref, base2) {
+  function mdLocal(ref, base) {
     let u;
     try {
-      u = new URL(ref, base2);
+      u = new URL(ref, base);
     } catch {
       return null;
     }
@@ -2338,7 +2363,7 @@
     } catch {}
     return { path: path.slice(1), hash: u.hash.slice(1) };
   }
-  function mdSetImage(img, src, base2) {
+  function mdSetImage(img, src, base) {
     img.setAttribute("loading", "lazy");
     img.setAttribute("decoding", "async");
     img.classList.add("md-zoomable");
@@ -2352,7 +2377,7 @@
       img.setAttribute("src", src);
       img.dataset.origSrc = src;
     } else if (src) {
-      const t = mdLocal(src, base2);
+      const t = mdLocal(src, base);
       if (t) {
         img.setAttribute("src", "/api/raw?path=" + encodeURIComponent(t.path));
         img.dataset.rawPath = t.path;
@@ -2360,7 +2385,7 @@
       }
     }
   }
-  function mdSetLink(a, href, base2) {
+  function mdSetLink(a, href, base) {
     if (href.startsWith("#")) {
       a.setAttribute("href", href);
       a.dataset.anchor = href.slice(1);
@@ -2375,7 +2400,7 @@
       a.rel = "noopener noreferrer";
       return;
     }
-    const t = mdLocal(href, base2);
+    const t = mdLocal(href, base);
     if (!t)
       return;
     a.setAttribute("href", "/api/raw?path=" + encodeURIComponent(t.path));
@@ -2388,17 +2413,17 @@
     for (const q of $$("blockquote", mdArticle))
       mdAlert(q);
     for (const pre of $$("pre", mdArticle)) {
-      const wrap2 = document.createElement("div");
-      wrap2.className = "md-pre";
+      const wrap = document.createElement("div");
+      wrap.className = "md-pre";
       if (pre.dataset.lang)
-        wrap2.dataset.lang = pre.dataset.lang;
-      pre.replaceWith(wrap2);
+        wrap.dataset.lang = pre.dataset.lang;
+      pre.replaceWith(wrap);
       const copy = document.createElement("button");
       copy.className = "md-copy";
       copy.title = "Copy code";
       copy.setAttribute("aria-label", "Copy code");
       copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
-      wrap2.append(pre, copy);
+      wrap.append(pre, copy);
     }
   }
   function mdAlert(q) {
@@ -2577,7 +2602,7 @@
   }
   function showPreviewHit(i) {
     const marks = $$("mark.md-hit", mdArticle);
-    marks.forEach((m2, k) => m2.classList.toggle("on", k === i));
+    marks.forEach((m, k) => m.classList.toggle("on", k === i));
     const m = marks[i];
     if (!m)
       return;
@@ -2966,18 +2991,18 @@
         posEl.textContent = d.imageMeta ? `${d.imageMeta.width} × ${d.imageMeta.height} px · ${zoomText}` : zoomText;
       }
     }
-    const isMd = !!(d && d.markdown), shown2 = previewing(d);
+    const isMd = !!(d && d.markdown), shown = previewing(d);
     const mdBtn = $('[data-action="md-preview"]');
     if (mdBtn) {
       mdBtn.hidden = !isMd;
-      mdBtn.classList.toggle("active", shown2);
+      mdBtn.classList.toggle("active", shown);
     }
     const sw = $("#md-switch");
     if (sw) {
       sw.hidden = !isMd;
       document.body.classList.toggle("md-tab", isMd);
       for (const b of sw.children)
-        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown2);
+        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown);
     }
     const hasDiff = !!(d && d.diffAvailable);
     const isDiffOn = !!(d && d.diffMode);
@@ -3509,15 +3534,15 @@
       return;
     const canvas = $("#imgview-canvas");
     const img = $("#imgview-img");
-    const vp2 = $("#imgview-viewport");
-    if (!canvas || !img || !vp2)
+    const vp = $("#imgview-viewport");
+    if (!canvas || !img || !vp)
       return;
     const natW = d.imageMeta?.width || img.naturalWidth || 100;
     const natH = d.imageMeta?.height || img.naturalHeight || 100;
     let currentScale = d.imageScale || 1;
     if (d.imageFit) {
-      const vpW = Math.max(100, vp2.clientWidth - 64);
-      const vpH = Math.max(100, vp2.clientHeight - 64);
+      const vpW = Math.max(100, vp.clientWidth - 64);
+      const vpH = Math.max(100, vp.clientHeight - 64);
       const fitScale = Math.min(vpW / natW, vpH / natH);
       currentScale = natW <= vpW && natH <= vpH ? 1 : fitScale;
       d.imageScale = currentScale;
@@ -3653,9 +3678,9 @@
     if (ivInit)
       return;
     ivInit = true;
-    const vp2 = $("#imgview-viewport");
+    const vp = $("#imgview-viewport");
     const hud = $("#imgview-hud");
-    if (!vp2)
+    if (!vp)
       return;
     $("#iv-zoom-in")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3689,7 +3714,7 @@
       e.stopPropagation();
       toggleImagePixelated();
     });
-    vp2.addEventListener("mousedown", (e) => {
+    vp.addEventListener("mousedown", (e) => {
       if (e.target.closest("#imgview-hud") || e.button !== 0)
         return;
       const d = doc_();
@@ -3698,7 +3723,7 @@
       isPanning = true;
       panStart = { x: e.clientX, y: e.clientY };
       panOrigin = { x: d.imagePanX || 0, y: d.imagePanY || 0 };
-      vp2.classList.add("panning");
+      vp.classList.add("panning");
       e.preventDefault();
     });
     window.addEventListener("mousemove", (e) => {
@@ -3720,9 +3745,9 @@
       if (!isPanning)
         return;
       isPanning = false;
-      vp2.classList.remove("panning");
+      vp.classList.remove("panning");
     });
-    vp2.addEventListener("wheel", (e) => {
+    vp.addEventListener("wheel", (e) => {
       const d = doc_();
       if (!d || !d.isImage)
         return;
@@ -3750,16 +3775,16 @@
     let idx = S2.tabs.findIndex((t) => t.path === path);
     if (idx < 0) {
       let j;
-      const start2 = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
+      const start = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
       try {
-        j = await api("/api/file", { path, start: start2, count: CHUNK });
+        j = await api("/api/file", { path, start, count: CHUNK });
       } catch (e) {
         setStatusNote(path + ": " + e.message, 4000);
         return;
       }
       const isImg = !!j.image;
       const hasDiff = !isImg && !!j.diffAvailable;
-      const d2 = {
+      const d = {
         path,
         name: path.split("/").pop(),
         lang: isImg ? "image" : j.lang,
@@ -3767,7 +3792,7 @@
         maxCols: isImg ? 0 : j.maxCols,
         size: j.size,
         lines: isImg ? [] : new Array(j.total),
-        chunks: new Set(isImg ? [] : [start2 / CHUNK]),
+        chunks: new Set(isImg ? [] : [start / CHUNK]),
         pending: new Set,
         refining: new Set,
         scrollTop: 0,
@@ -3783,15 +3808,15 @@
       };
       if (!isImg) {
         for (let i = 0;i < j.lines.length; i++)
-          d2.lines[j.start + i] = j.lines[i];
+          d.lines[j.start + i] = j.lines[i];
       }
-      d2.lsp = !isImg && j.lsp || { state: "off", server: "" };
-      S2.tabs.push(d2);
+      d.lsp = !isImg && j.lsp || { state: "off", server: "" };
+      S2.tabs.push(d);
       idx = S2.tabs.length - 1;
       if (!isImg && j.refine)
-        refineChunk(d2, start2 / CHUNK);
+        refineChunk(d, start / CHUNK);
       if (!isImg)
-        loadGutter(d2);
+        loadGutter(d);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
@@ -3826,6 +3851,10 @@
       loadOutline();
     if (push)
       pushHistory(path, line || d.cur, col);
+    if (opts.reveal && S2.settings?.["explorer.autoReveal"] !== false) {
+      showPanel("files");
+      await revealFile(path, () => doc_() === d);
+    }
   }
   function loadGutter(d) {
     if (!S2.meta?.git)
@@ -3893,7 +3922,7 @@
       const hasDiff = !!j.diffAvailable;
       const newCur = Math.max(1, Math.min(keep.cur || 1, j.total));
       const diffMode = hasDiff ? keep.diffMode || null : null;
-      const d2 = {
+      const d = {
         path: tgt.path,
         name: tgt.path.split("/").pop(),
         lang: j.lang,
@@ -3918,13 +3947,13 @@
         diffScroll: keep === activeDoc && keep.diffMode ? diffScrollTop() : 0
       };
       for (let k = 0;k < j.lines.length; k++) {
-        d2.lines[j.start + k] = j.lines[k];
+        d.lines[j.start + k] = j.lines[k];
       }
-      d2.lsp = j.lsp || { state: "off", server: "" };
-      S2.tabs[idx] = d2;
+      d.lsp = j.lsp || { state: "off", server: "" };
+      S2.tabs[idx] = d;
       if (j.refine)
-        refineChunk(d2, tgt.start / CHUNK);
-      loadGutter(d2);
+        refineChunk(d, tgt.start / CHUNK);
+      loadGutter(d);
     }
     const d = doc_();
     if (d) {
@@ -4461,9 +4490,9 @@
     if (vimPending === "g") {
       e.preventDefault();
       if (e.key === "g") {
-        const count2 = parseInt(vimCount, 10);
-        if (!isNaN(count2) && count2 > 0) {
-          d.cur = Math.max(1, Math.min(d.total, count2));
+        const count = parseInt(vimCount, 10);
+        if (!isNaN(count) && count > 0) {
+          d.cur = Math.max(1, Math.min(d.total, count));
           d.col = 0;
           const y = (d.cur - 1) * LH;
           vp.scrollTop = Math.max(0, y - LH * 3);
@@ -4493,9 +4522,9 @@
       } else if (e.key === "h") {
         showCalls();
       } else if (e.key === "t") {
-        const count2 = parseInt(vimCount, 10);
-        if (!isNaN(count2) && count2 > 0 && count2 <= S2.tabs.length) {
-          switchTab(count2 - 1);
+        const count = parseInt(vimCount, 10);
+        if (!isNaN(count) && count > 0 && count <= S2.tabs.length) {
+          switchTab(count - 1);
         } else if (S2.tabs.length > 1) {
           switchTab((S2.active + 1) % S2.tabs.length);
         }
@@ -5686,24 +5715,24 @@
       renderSettingsNav();
       renderSettingsList();
     });
-    const listEl2 = $("#settings-list");
-    if (listEl2) {
-      listEl2.addEventListener("change", (e) => {
-        const target2 = e.target;
-        const key = target2.dataset.key;
+    const listEl = $("#settings-list");
+    if (listEl) {
+      listEl.addEventListener("change", (e) => {
+        const target = e.target;
+        const key = target.dataset.key;
         if (!key)
           return;
         let value;
-        if (target2.type === "checkbox") {
-          value = target2.checked;
-        } else if (target2.type === "number") {
-          value = parseFloat(target2.value);
+        if (target.type === "checkbox") {
+          value = target.checked;
+        } else if (target.type === "number") {
+          value = parseFloat(target.value);
         } else {
-          value = target2.value;
+          value = target.value;
         }
         handleSettingChange(key, value);
       });
-      listEl2.addEventListener("click", (e) => {
+      listEl.addEventListener("click", (e) => {
         const pill = e.target.closest(".settings-pill-tag");
         if (pill) {
           const key = pill.dataset.setKey;
@@ -6315,7 +6344,7 @@
       pal.restoreTheme = null;
     closePalette();
     if (it.kind === "file")
-      openFile(it.path);
+      openFile(it.path, { reveal: true });
     else if (it.kind === "sym" || it.kind === "line") {
       const d = doc_();
       if (!d)
@@ -6723,15 +6752,15 @@
     if (!instruction || !session.target)
       return;
     const params = { path: session.target.path, l1: session.target.l1, l2: session.target.l2, instruction };
-    let job2;
+    let job;
     try {
-      job2 = await apiPost("/api/agent/edit", params);
+      job = await apiPost("/api/agent/edit", params);
     } catch (e) {
       showErr(session, e.message);
       return;
     }
-    session.jobId = job2.id;
-    session.harness = job2.harness;
+    session.jobId = job.id;
+    session.harness = job.harness;
     hideSelectionBar();
     const initialNote = "Editing with " + (chosenModel() ? chosen() + " (" + chosenModel() + ")" : chosen()) + "...";
     setBusy(session, true, initialNote);
